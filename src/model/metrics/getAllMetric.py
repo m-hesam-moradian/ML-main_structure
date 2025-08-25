@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Jul 22 08:10:53 2023
-
-@author: Ideal-R
-"""
 import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_squared_error
@@ -15,65 +9,167 @@ from sklearn.metrics import (
     confusion_matrix,
     r2_score,
     precision_score,
+    precision_recall_curve,
+    auc,
+    confusion_matrix,
+    average_precision_score,
+    fbeta_score,
 )
-from scipy import stats
+from sklearn.preprocessing import label_binarize
+from sklearn.metrics import roc_curve, auc, matthews_corrcoef
+from sklearn.metrics import roc_curve
+from sklearn.metrics import precision_recall_curve
 
-
-def MAGEFunc(predictions, actuals):
-    # Ensure the inputs are numpy arrays
-    predictions = np.array(predictions)
-    actuals = np.array(actuals)
-
-    # Calculate the absolute errors
-    absolute_errors = np.abs(predictions - actuals)
-
-    # Compute the mean absolute gross error (MAGE)
-    mage = np.mean(absolute_errors)
-
-    return mage
-
-
-def find_zero(arr):
-    try:
-        index = arr.index(0)
-        return index
-    except ValueError:
-        return -1  # Return -1 if 0 is not found
-
+from itertools import cycle
+import matplotlib.pyplot as plt
 
 # Data Loading
-data = np.loadtxt("D:/ML/Data_err.npt")
-
+data = np.loadtxt(r"D:\ML\main_structure\data\Data_err.npt")
 y = data[:, 0]
 predictData = data[:, 1]
+import numpy as np
+from collections import Counter
+
+
+def get_confusion_matrix_values(y_true, y_pred, labels):
+    cm = confusion_matrix(y_true, y_pred, labels=labels)
+    return cm
+
+
+# Custom metric functions
+def calculate_pod(cm, labels):
+    pod = []
+    for i, label in enumerate(labels):
+        tp = cm[i, i]
+        fn = sum(cm[i, :]) - tp
+        pod.append(tp / (tp + fn) if (tp + fn) != 0 else 0)
+    return pod
+
+
+def calculate_far(cm, labels):
+    far = []
+    for i, label in enumerate(labels):
+        tp = cm[i, i]
+        fp = sum(cm[:, i]) - tp
+        far.append(fp / (fp + tp) if (fp + tp) != 0 else 0)
+    return far
+
+
+def calculate_csi(cm, labels):
+    csi = []
+    for i, label in enumerate(labels):
+        tp = cm[i, i]
+        fp = sum(cm[:, i]) - tp
+        fn = sum(cm[i, :]) - tp
+        csi.append(tp / (tp + fp + fn) if (tp + fp + fn) != 0 else 0)
+    return csi
+
+
+def calculate_fb(cm, labels):
+    fb = []
+    for i, label in enumerate(labels):
+        tp = cm[i, i]
+        fp = sum(cm[:, i]) - tp
+        fn = sum(cm[i, :]) - tp
+        fb.append((tp + fp) / (tp + fn) if (tp + fn) != 0 else 0)
+    return fb
+
+
+def calculate_far(cm, labels):
+    far = []
+    for i, label in enumerate(labels):
+        tp = cm[i, i]
+        fp = sum(cm[:, i]) - tp
+        far.append(fp / (fp + tp) if (fp + tp) != 0 else 0)
+    return far
+
+
+def calculate_hss(cm):
+    n = cm.sum()
+    po = np.trace(cm) / n
+    pe = sum([(sum(cm[i, :]) * sum(cm[:, i])) for i in range(len(cm))]) / (n * n)
+    # hss = (2 * (TP * TN - FP * FN)) / ((TP + FN) * (FN + TN) + (TP + FP) * (FP + TN))
+    return (po - pe) / (1 - pe) if (1 - pe) != 0 else 0  # -*- coding: utf-8 -*-
+
+
+import math
+from sklearn.metrics import confusion_matrix
+
+
+def FM(y, y_pred):
+    # Generate confusion matrix
+    tn, fp, fn, tp = confusion_matrix(y, y_pred).ravel()
+
+    # Calculate Precision (PPV)
+    precision = tp / (tp + fp) if (tp + fp) != 0 else 0
+
+    # Calculate Recall (TPR)
+    recall = tp / (tp + fn) if (tp + fn) != 0 else 0
+
+    # Calculate F-Measure (FM)
+    f_measure = math.sqrt(precision * recall)
+
+    return f_measure
+
+
+def balanced_accuracy(y_true, y_pred):
+    # محاسبه ماتریس سردرگمی
+    cm = confusion_matrix(y_true, y_pred)
+
+    # Check if binary classification
+    if cm.shape == (2, 2):
+        # Unpack confusion matrix values for binary classification
+        tn, fp, fn, tp = cm.ravel()
+    else:
+        # Multiclass classification: Calculate metrics per class
+        num_classes = cm.shape[0]
+        metrics = {}
+
+        for i in range(num_classes):
+            # One-vs-All metrics for each class
+            tn = cm[i, i]
+            fn = sum(cm[i, :]) - tn
+            fp = sum(cm[:, i]) - tn
+            tp = sum(cm) - (tn + fn + fp)
+    # محاسبه دقت متوازن
+    balanced_acc = 0.5 * ((tp / (tp + fn)) + (tn / (tn + fp)))
+
+    return balanced_acc
+
+
+def calculate_acc_balance(cm, labels):
+    acc_b = []
+    for i, label in enumerate(labels):
+        tp = cm[i, i]
+        fn = sum(cm[i, :]) - tp
+        fp = sum(cm[:, i]) - tp
+        tn = sum(cm) - (tp + fn + fp)
+        acc_b.append(0.5 * ((tp / (tp + fn)) + (tn / (tn + fp))))
+    return acc_b
 
 
 def frequency_bias(y_true, y_pred):
     """
-    Calculate the Frequency Bias (FB) metric.
+    Calculate the frequency bias metric.
 
     Parameters:
-    y_true (array-like): True labels.
-    y_pred (array-like): Predicted labels.
+    y_true (array-like): True class labels
+    y_pred (array-like): Predicted class labels
 
     Returns:
-    float: The frequency bias metric.
+    float: The frequency bias value
     """
-    # Calculate confusion matrix
-    cm = confusion_matrix(y_true, y_pred)
+    # Get unique class labels
+    classes = np.unique(np.concatenate([y_true, y_pred]))
 
-    # True Positives (TP) and False Positives (FP)
-    TP = cm[1, 1]
-    FP = cm[0, 1]
+    # Calculate true and predicted frequency distributions
+    true_freq = np.array([np.sum(y_true == cls) for cls in classes]) / len(y_true)
+    pred_freq = np.array([np.sum(y_pred == cls) for cls in classes]) / len(y_pred)
 
-    # Actual positives (P) and predicted positives (P_pred)
-    P = np.sum(y_true)
-    P_pred = np.sum(y_pred)
+    # Calculate the frequency bias as the sum of absolute differences in frequency
+    bias = np.sum(np.abs(true_freq - pred_freq))
 
-    # Frequency Bias (FB)
-    FB = (P_pred - P) / (P_pred + P)
-
-    return FB
+    return bias
 
 
 def formula(p, r, N):
@@ -91,534 +187,346 @@ def formula(p, r, N):
     return result
 
 
-def relative_absolute_error(y_true, y_pred):
-    numerator = np.sum(np.abs(y_true - y_pred))
-    denominator = np.sum(np.abs(y_true - np.mean(y_true)))
-    return numerator / denominator
-
-
-def log_cosh_loss(y_true, y_pred):
-    diff = y_pred - y_true
-
-    diff_clipped = np.clip(diff, -100, 100)  # adjust bounds if needed
-    return np.mean(np.log(np.cosh(diff_clipped)))
-
-
-def calculate_mv(y_pred, y_true):
-    """
-    Calculate the Mean Value (MV) metric.
-
-    Parameters:
-    y_pred (array-like): Predicted values.
-    y_true (array-like): True values.
-
-    Returns:
-    float: MV metric.
-    """
-    y_pred = np.array(y_pred)
-    y_true = np.array(y_true)
-    return np.mean(y_pred / y_true)
-
-
-def COV(y_pred, y_true):
-    """
-    Calculate the Coefficient of Variation (COV) metric.
-
-    Parameters:
-    y_pred (array-like): Predicted values.
-    y_true (array-like): True values.
-
-    Returns:
-    float: COV metric.
-    """
-    y_pred = np.array(y_pred)
-    y_true = np.array(y_true)
-    ratios = y_pred / y_true
-    mean_ratios = np.mean(ratios)
-    std_ratios = np.std(ratios, ddof=1)
-    return std_ratios / mean_ratios
-
-
-def GRI(y_true, y_pred):
-    """
-    محاسبه GR100 و GR125 برای مقایسه پیش‌بینی با مقدار واقعی
-
-    پارامترها:
-        y_true: لیست یا آرایه‌ی مقادیر واقعی
-        y_pred: لیست یا آرایه‌ی مقادیر پیش‌بینی‌شده
-
-    خروجی:
-        دیکشنری شامل GR100 و GR125 به صورت درصد (مثلاً 85.0 به معنی 85%)
-    """
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
-
-    ratio = y_pred / y_true
-
-    gr100 = np.mean(ratio <= 1.00) * 100  # ≤ 100%
-    gr125 = np.mean(ratio <= 1.25) * 100  # ≤ 125%
-
-    return round(gr100, 2), round(gr125, 2)
-
-
-def a20_index(retrieved_documents, relevant_documents, k=20):
-    """
-    محاسبه متریک A20-Index
-    :param retrieved_documents: لیستی از شناسه‌های اسناد بازیابی‌شده توسط مدل
-    :param relevant_documents: لیستی از شناسه‌های اسناد مرتبط
-    :param k: تعداد نتایج اول مورد بررسی (پیش‌فرض 20)
-    :return: 1 اگر حداقل یک سند مرتبط در k نتیجه اول باشد، در غیر این صورت 0
-    """
-    top_k_docs = retrieved_documents[:k]  # گرفتن 20 نتیجه اول
-    return int(
-        any(doc in relevant_documents for doc in top_k_docs)
-    )  # بررسی وجود سند مرتبط
-
-
-def relative_squared_error(actual, predicted):
-    """
-    Calculate the Relative Squared Error between actual and predicted values.
-
-    Parameters:
-    actual : array-like of actual values
-    predicted : array-like of predicted values
-
-    Returns:
-    float : Relative Squared Error value
-    """
-    import numpy as np
-
-    # Convert inputs to numpy arrays
-    actual = np.array(actual)
-    predicted = np.array(predicted)
-
-    # Check if lengths match
-    if len(actual) != len(predicted):
-        raise ValueError("Length of actual and predicted values must match")
-
-    # Calculate mean of actual values
-    actual_mean = np.mean(actual)
-
-    # Calculate numerator (sum of squared errors)
-    numerator = np.sum((predicted - actual) ** 2)
-
-    # Calculate denominator (sum of squared differences from mean)
-    denominator = np.sum((actual - actual_mean) ** 2)
-
-    # Avoid division by zero
-    if denominator == 0:
-        return float("inf") if numerator > 0 else 0
-
-    return numerator / denominator
-
-
-import numpy as np
-
-
-def calculate_metrics(X, Y):
-    """
-    X: numpy array of actual values
-    Y: numpy array of predicted values
-    Returns: PDs, APD, AAPD
-    """
-
-    # تبدیل ورودی‌ها به آرایه‌های NumPy
-    X = np.array(X)
-    Y = np.array(Y)
-
-    # جلوگیری از تقسیم بر صفر
-    mask = X != 0
-    X = X[mask]
-    Y = Y[mask]
-
-    # محاسبه PD برای هر نمونه
-    PD = (X - Y) / X * 100
-
-    # محاسبه میانگین (APD) و میانگین قدرمطلق (AAPD)
-    APD = np.mean(PD)
-    AAPD = np.mean(np.abs(PD))
-
-    return PD, APD, AAPD
-
-
-import numpy as np
-
-
-def correlation_and_determination(X, Y):
-    X = np.array(X)
-    Y = np.array(Y)
-
-    X_mean = np.mean(X)
-    Y_mean = np.mean(Y)
-
-    numerator = np.sum((X - X_mean) * (Y - Y_mean))
-    denominator = np.sqrt(np.sum((X - X_mean) ** 2)) * np.sqrt(
-        np.sum((Y - Y_mean) ** 2)
-    )
-
-    R = numerator / denominator
-
-    return R
-
-
-def sd_of_errors(y_true, y_pred):
-    errors = np.array(y_true) - np.array(y_pred)
-    n = len(errors)
-    sd = np.sqrt(np.sum((errors - np.mean(errors)) ** 2) / (n - 1))
-    return sd
-
-
-def r2_score_manual(y_true, y_pred):
-    """
-    محاسبه ضریب تعیین (R^2)
-
-    :param y_true: لیست یا آرایه‌ای از مقادیر واقعی
-    :param y_pred: لیست یا آرایه‌ای از مقادیر پیش‌بینی‌شده
-    :return: مقدار R^2
-    """
-    # تبدیل لیست‌ها به آرایه‌های numpy
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
-
-    # محاسبه میانگین مقادیر واقعی
-    mean_true = np.mean(y_true)
-
-    # محاسبه مجموع مربعات خطا (SSE) و مجموع مربعات کل (SST)
-    ss_res = np.sum((y_true - y_pred) ** 2)  # مجموع مربعات خطا
-    ss_tot = np.sum((y_true - mean_true) ** 2)  # مجموع مربعات کل
-
-    # محاسبه R^2
-    r2 = 1 - (ss_res / ss_tot)
-    return r2
-
-
-# مثال:
-
-
-def nse_score(Q_obs, Q_sim):
-    """
-    محاسبه متریک Nash-Sutcliffe Efficiency (NSE)
-
-    :param Q_obs: لیست یا آرایه‌ای از مقادیر مشاهده‌شده
-    :param Q_sim: لیست یا آرایه‌ای از مقادیر شبیه‌سازی‌شده
-    :return: مقدار NSE
-    """
-    # محاسبه میانگین مقادیر مشاهده‌شده
-    mean_obs = np.mean(Q_obs)
-
-    # محاسبه بروز خطاها
-    numerator = np.sum((Q_obs - Q_sim) ** 2)
-    denominator = np.sum((Q_obs - mean_obs) ** 2)
-
-    # محاسبه و بازگشت NSE
-    NSE = 1 - (numerator / denominator)
-    return NSE
-
-
-def pbias(observed, simulated):
-    """
-    محاسبه PBIAS یا IAE بین داده‌های مشاهده‌شده و شبیه‌سازی‌شده
-
-    Args:
-        observed (list or array): لیست یا آرایه‌ای از داده‌های مشاهده‌شده (x)
-        simulated (list or array): لیست یا آرایه‌ای از داده‌های شبیه‌سازی‌شده (ŷ)
-
-    Returns:
-        float: مقدار PBIAS
-    """
-    observed = np.array(observed)
-    simulated = np.array(simulated)
-
-    numerator = np.sum(observed - simulated)
-    denominator = np.sum(simulated)
-
-    if denominator == 0:
-        raise ZeroDivisionError(
-            "مجموع داده‌های شبیه‌سازی‌شده صفر است، نمی‌توان تقسیم انجام داد."
+from sklearn.metrics import confusion_matrix
+
+
+def calculate_metrics(y_true, y_pred):
+    # Compute confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+
+    # Check if binary classification
+    if cm.shape == (2, 2):
+        # Unpack confusion matrix values for binary classification
+        TN, FP, FN, TP = cm.ravel()
+
+        # Calculate metrics
+        error_rate = (FN + FP) / (TP + TN + FN + FP)
+        sensitivity = TP / (TP + FN) if (TP + FN) != 0 else 0
+        precision = TP / (TP + FP) if (TP + FP) != 0 else 0
+        f_measure = (
+            2 * (precision * sensitivity) / (precision + sensitivity)
+            if (precision + sensitivity) != 0
+            else 0
         )
 
-    return numerator / denominator
+        metrics = {
+            "Sensitivity (Recall)": sensitivity,
+            "Precision": precision,
+            "F-Measure": f_measure,
+        }
+
+    else:
+        # Multiclass classification: Calculate metrics per class
+        num_classes = cm.shape[0]
+        metrics = {}
+
+        for i in range(num_classes):
+            # One-vs-All metrics for each class
+            TP = cm[i, i]
+            FN = sum(cm[i, :]) - TP
+            FP = sum(cm[:, i]) - TP
+            TN = sum(cm) - (TP + FN + FP)
+
+            sensitivity = TP / (TP + FN) if (TP + FN) != 0 else 0
+            precision = TP / (TP + FP) if (TP + FP) != 0 else 0
+            f_measure = (
+                2 * (precision * sensitivity) / (precision + sensitivity)
+                if (precision + sensitivity) != 0
+                else 0
+            )
+
+            metrics[f"Class {i}"] = {
+                "Sensitivity (Recall)": sensitivity,
+                "Precision": precision,
+                "F-Measure": f_measure,
+            }
+
+    return f_measure
 
 
-def ci_metrics(y_true, y_pred, confidence=0.95):
-    """
-    محاسبه متریک‌های فاصله اطمینان با ورودی y_true و y_pred:
-    - محاسبه MSE و خطای استاندارد
-    - محاسبه حاشیه خطا با توزیع t
-    - تولید بازه‌های CI و محاسبه متریک‌ها
+def specificity_metric(y_true, y_pred):
+    cm = confusion_matrix(y_true, y_pred)
 
-    ورودی‌ها:
-    y_true: آرایه مقادیر واقعی
-    y_pred: آرایه مقادیر پیش‌بینی‌شده
-    confidence: سطح اطمینان اسمی (مثلاً 0.95)
-    """
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
-    n = len(y_true)
+    if cm.shape == (2, 2):  # For binary classification
+        TN, FP, FN, TP = cm.ravel()
+        specificity = TN / (TN + FP) if (TN + FP) != 0 else 0
 
-    # باقیمانده‌ها و MSE
-    residuals = y_true - y_pred
-    mse = np.mean(residuals**2)
-
-    # خطای استاندارد پیش‌بینی (برای هر نقطه به‌طور یکسان)
-    se = np.sqrt(mse * (1 + 1 / n))
-
-    # مقدار t برای سطح اطمینان
-    t_value = stats.t.ppf((1 + confidence) / 2.0, df=n - 1)
-    margin = t_value * se
-
-    # بازه‌های CI
-    lower_bounds = y_pred - margin
-    upper_bounds = y_pred + margin
-
-    # محاسبه متریک‌ها
-    ci_widths = upper_bounds - lower_bounds
-    mean_ci_width = np.mean(ci_widths)
-    coverage = np.mean((y_true >= lower_bounds) & (y_true <= upper_bounds))
-    calibration_error = coverage - confidence
-
-    return lower_bounds, upper_bounds, mean_ci_width, coverage, calibration_error
-
-
-def index_of_agreement(observed, predicted):
-    observed = np.array(observed)
-    predicted = np.array(predicted)
-
-    mean_observed = np.mean(observed)
-    numerator = np.sum((predicted - observed) ** 2)
-    denominator = np.sum(
-        (np.abs(predicted - mean_observed) + np.abs(observed - mean_observed)) ** 2
-    )
-
-    if denominator == 0:
-        return 1.0 if numerator == 0 else 0.0
-
-    ia = 1 - (numerator / denominator)
-    return ia
-
-
-def fe(observed, simulated):
-    """
-    محاسبه شاخص Fractional Error (FE)
-
-    Args:
-        observed (list or array): داده‌های مشاهده‌شده (x)
-        simulated (list or array): داده‌های شبیه‌سازی‌شده (ŷ)
-
-    Returns:
-        float: مقدار FE
-    """
-    observed = np.array(observed)
-    simulated = np.array(simulated)
-
-    numerator = np.abs(simulated - observed)
-    denominator = simulated + observed
-
-    # جلوگیری از تقسیم بر صفر
-    with np.errstate(divide="ignore", invalid="ignore"):
-        fraction = np.where(denominator != 0, numerator / denominator, 0)
-
-    fe_value = 2 * np.mean(fraction)
-    return fe_value
+    else:
+        for i in range(num_classes):
+            # True Negatives (TN): Exclude row and column for class i
+            TN = np.sum(cm) - (np.sum(cm[i, :]) + np.sum(cm[:, i]) - cm[i, i])
+            # False Positives (FP): Sum of column for class i excluding diagonal
+            FP = np.sum(cm[:, i]) - cm[i, i]
+            # Specificity for class i
+            specificity = TN / (TN + FP) if (TN + FP) != 0 else 0
+    return specificity
 
 
 import numpy as np
 
 
-def explained_variance_score(y_true, y_pred):
+def jaccard_index(y, y_pred, average="weighted"):
     """
-    محاسبه متریک Explained Variance Score (EVS)
+    Calculate the Jaccard Index for binary or multi-class data.
 
-    پارامترها:
-        y_true: آرایه یا لیست از مقادیر واقعی
-        y_pred: آرایه یا لیست از مقادیر پیش‌بینی‌شده
+    Parameters:
+    y (array-like): Ground truth labels.
+    y_pred (array-like): Predicted labels.
+    average (str): Type of averaging to perform. Options are:
+        - 'macro': Calculate metrics for each class and take the average.
+        - 'weighted': Calculate metrics for each class and take the average weighted by the number of true instances.
+        - 'micro': Calculate metrics globally by counting total true positives, false positives, and false negatives.
 
-    خروجی:
-        مقدار EVS (عددی بین -∞ تا 1، هرچه به 1 نزدیک‌تر بهتر)
+    Returns:
+    float: Jaccard Index.
+    """
+    y = np.array(y)
+    y_pred = np.array(y_pred)
+
+    # Get unique classes
+    classes = np.unique(np.concatenate([y, y_pred]))
+
+    if average == "micro":
+        # Calculate global counts
+        true_positives = np.sum((y == y_pred) & (y != 0))
+        false_positives = np.sum((y != y_pred) & (y_pred != 0))
+        false_negatives = np.sum((y != y_pred) & (y != 0))
+        denominator = true_positives + false_positives + false_negatives
+        return true_positives / denominator if denominator > 0 else 0.0
+
+    jaccard_scores = []
+    for cls in classes:
+        # Calculate for each class
+        tp = np.sum((y == cls) & (y_pred == cls))
+        fp = np.sum((y != cls) & (y_pred == cls))
+        fn = np.sum((y == cls) & (y_pred != cls))
+        denominator = tp + fp + fn
+        jaccard_scores.append(tp / denominator if denominator > 0 else 0.0)
+
+    if average == "macro":
+        return np.mean(jaccard_scores)
+    elif average == "weighted":
+        weights = [np.sum(y == cls) for cls in classes]
+        return np.average(jaccard_scores, weights=weights)
+    else:
+        raise ValueError(
+            "Invalid value for 'average'. Choose from 'macro', 'weighted', or 'micro'."
+        )
+
+
+# Example usage:
+
+
+from sklearn.metrics import confusion_matrix
+import numpy as np
+
+
+def log_loss(y_true, y_pred, eps=1e-15):
+    """
+    Compute the Log Loss (Cross-Entropy Loss)
+
+    Parameters:
+    - y_true: array-like of shape (n_samples,) or (n_samples, n_classes)
+              True labels (integers for multiclass or 0/1 for binary)
+    - y_pred: array-like of shape (n_samples,) or (n_samples, n_classes)
+              Predicted probabilities
+    - eps: float, small number to avoid log(0)
+
+    Returns:
+    - log_loss: float
     """
     y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
+    y_pred = np.clip(np.array(y_pred), eps, 1 - eps)
 
-    numerator = np.var(y_true - y_pred)
-    denominator = np.var(y_true)
+    # Binary classification
+    if y_pred.ndim == 1 or y_pred.shape[1] == 1:
+        y_true = y_true.flatten()
+        return -np.mean(y_true * np.log(y_pred) + (1 - y_true) * np.log(1 - y_pred))
 
-    evs = 1 - (numerator / denominator)
-    return round(evs, 4)
+    # Multiclass classification
+    n_samples = y_true.shape[0]
+    if y_true.ndim == 1:
+        # Convert to one-hot
+        y_true_one_hot = np.zeros_like(y_pred)
+        y_true_one_hot[np.arange(n_samples), y_true] = 1
+    else:
+        y_true_one_hot = y_true
+
+    return -np.sum(y_true_one_hot * np.log(y_pred)) / n_samples
 
 
-def median_absolute_relative_deviation(y_true, y_pred):
+from sklearn.metrics import (
+    confusion_matrix,
+    precision_score,
+    recall_score,
+    f1_score,
+    fbeta_score,
+    log_loss,
+    accuracy_score,
+    balanced_accuracy_score,
+)
+
+
+from sklearn.preprocessing import LabelEncoder
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import LabelEncoder
+import warnings
+
+
+def ci(y_true, y_proba, n_bins=10, plot=False):
+    """
+    نسخه‌ی مقاوم برای محاسبه Brier Score و ECE در Classification.
+    """
     y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
-    relative_errors = np.abs((y_true - y_pred) / y_true)
-    return np.median(relative_errors)
+    y_proba = np.array(y_proba)
+
+    # اگر y_proba یک بردار بود → احتمال یک کلاس → تبدیل به دو ستون
+    if y_proba.ndim == 1:
+        warnings.warn(
+            "y_proba had shape (n_samples,); assuming binary classification. Converting to 2-column format."
+        )
+        y_proba = np.stack([1 - y_proba, y_proba], axis=1)
+
+    n_classes = y_proba.shape[1]
+
+    # برچسب‌ها رو عددی کن (در صورت لزوم)
+    if not np.issubdtype(y_true.dtype, np.integer):
+        le = LabelEncoder()
+        y_true = le.fit_transform(y_true)
+        class_names = le.classes_
+    else:
+        class_names = [str(i) for i in range(n_classes)]
+
+    # فیلتر نمونه‌هایی که کلاس‌شون توی y_proba نیست
+    mask = y_true < n_classes
+    if np.sum(mask) < len(y_true):
+        dropped = len(y_true) - np.sum(mask)
+        warnings.warn(
+            f"{dropped} samples dropped: y_true contains class labels not in y_proba output shape."
+        )
+        y_true = y_true[mask]
+        y_proba = y_proba[mask]
+
+    # محاسبه pred و conf
+    preds = np.argmax(y_proba, axis=1)
+    confidences = np.max(y_proba, axis=1)
+
+    # Accuracy
+    accuracy = np.mean(preds == y_true)
+
+    # Brier Score
+    one_hot = np.eye(n_classes)[y_true]
+    brier_score = np.mean(np.sum((y_proba - one_hot) ** 2, axis=1))
+
+    # ECE
+    bins = np.linspace(0, 1, n_bins + 1)
+    ece = 0.0
+    accs, confs = [], []
+
+    for i in range(n_bins):
+        mask = (confidences > bins[i]) & (confidences <= bins[i + 1])
+        if np.any(mask):
+            acc_bin = np.mean(preds[mask] == y_true[mask])
+            conf_bin = np.mean(confidences[mask])
+            ece += (mask.sum() / len(y_true)) * abs(acc_bin - conf_bin)
+            accs.append(acc_bin)
+            confs.append(conf_bin)
+        else:
+            accs.append(0)
+            confs.append(0)
+
+    # نمودار
+    if plot:
+        bin_centers = (bins[:-1] + bins[1:]) / 2
+        plt.figure(figsize=(6, 5))
+        plt.plot(bin_centers, accs, label="Accuracy", marker="o")
+        plt.plot(bin_centers, confs, label="Confidence", linestyle="--")
+        plt.plot([0, 1], [0, 1], "k--", label="Perfect Calibration")
+        plt.xlabel("Confidence")
+        plt.ylabel("Accuracy")
+        plt.title("Reliability Diagram")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+    return brier_score, ece
 
 
-def calculate_cov_ratio(y_true, y_pred):
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
+from sklearn.preprocessing import LabelBinarizer
 
-    if len(y_true) != len(y_pred):
-        raise ValueError("Length of y_true and y_pred must be equal")
 
-    m = len(y_true)
-    ratios = y_pred / y_true
-    mean_ratio = np.mean(ratios)
+def heidke_skill_score(y_true, y_pred):
+    labels = np.unique(np.concatenate((y_true, y_pred)))
 
-    numerator = np.sqrt(np.sum((ratios - mean_ratio) ** 2) / (m - 1))
-    cov_value = numerator / mean_ratio
+    if len(labels) == 2:
+        # ✅ باینری: همان کد اصلی شما
+        cm = confusion_matrix(y_true, y_pred, labels=labels)
+        TN, FP, FN, TP = cm.ravel()
 
-    return cov_value
+        numerator = 2 * (TP * TN - FP * FN)
+        denominator = (TP + FN) * (FN + TN) + (TP + FP) * (FP + TN)
+
+        return numerator / denominator if denominator != 0 else 0
+
+    else:
+        # ✅ چندکلاسه: Macro-Averaged HSS
+        hss_list = []
+        for cls in labels:
+            # One-vs-rest
+            y_true_bin = (y_true == cls).astype(int)
+            y_pred_bin = (y_pred == cls).astype(int)
+
+            cm = confusion_matrix(y_true_bin, y_pred_bin, labels=[0, 1])
+            if cm.shape != (2, 2):
+                # اگر کلاس موردنظر در pred یا true نبود
+                hss_list.append(0)
+                continue
+
+            TN, FP, FN, TP = cm.ravel()
+            numerator = 2 * (TP * TN - FP * FN)
+            denominator = (TP + FN) * (FN + TN) + (TP + FP) * (FP + TN)
+            hss = numerator / denominator if denominator != 0 else 0
+            hss_list.append(hss)
+
+        return np.mean(hss_list)
 
 
 def getAllMetric(measured, predicted):
+    cm = confusion_matrix(measured, predicted)
 
-    # Main Loop
-    N = len(measured)
-    S1, S2, S3, S4, S5, S6, S7, S8, S9 = (
-        0,
-        0,
-        np.zeros_like(measured),
-        np.zeros_like(measured),
-        0,
-        0,
-        0,
-        np.zeros_like(measured),
-        0,
-    )
-    R, R1, R2, R3, S10, S11, S12, S14, S15, S16, S17 = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    M, Z, T, TP = 0, 0, 0, 0
-
-    for i in range(N):
-        # MSE & RMSE
-        M += (predicted[i] - measured[i]) ** 2
-        T += measured[i] ** 2
-        TP += predicted[i] ** 2
-        # tu=
-        # TU1=
-        # MAE & WAPE
-        Z += abs(predicted[i] - measured[i])
-        # TU1+=(predicted[i] - measured[i])**2
-        # R2
-        R1 += (measured[i] - np.mean(measured)) * (predicted[i] - np.mean(predicted))
-        R2 += (predicted[i] - np.mean(predicted)) ** 2
-        R3 += (measured[i] - np.mean(measured)) ** 2
-
-        # MAPE
-        S7 += abs((predicted[i] - measured[i]) / predicted[i]) * 100
-
-        # MDAPE
-        S8[i] = abs((predicted[i] - measured[i]) / predicted[i]) * 100
-
-        # NMSE
-        S9 += ((predicted[i] - measured[i]) ** 2) / (measured[i] * predicted[i])
-
-        # MBE & FB
-        S2 += predicted[i] - measured[i]
-        S3[i] = predicted[i] - measured[i]
-        S12 += measured[i] - predicted[i]
-        S13 = measured[i] - predicted[i]
-        S10 += (2 * S13) / (predicted[i] + measured[i])
-        S11 += S13 / measured[i]
-        S14 += abs(S13) / abs(measured[i])
-        S15 += abs(S13) / (abs((measured[i]) - np.mean(measured)))
-        # IOA
-        S16 = S16 + (measured[i] - predicted[i]) ** 2
-        S17 = (
-            S17
-            + (
-                (abs(predicted[i] - np.mean(measured)))
-                + (abs(measured[i] - np.mean(measured)))
-            )
-            ** 2
+    if cm.shape == (2, 2):
+        # Binary classification
+        TN, FP, FN, TP = cm.ravel()
+        sensitivity = TP / (TP + FN) if (TP + FN) != 0 else 0
+        ppv = TP / (TP + FP) if (TP + FP) != 0 else 0
+        npv = TN / (TN + FN) if (TN + FN) != 0 else 0
+        overall_accuracy = (
+            (TP + TN) / (TP + TN + FP + FN) if (TP + TN + FP + FN) != 0 else 0
         )
+    else:
+        # Multiclass classification - use macro/micro metrics
+        sensitivity = recall_score(measured, predicted, average="macro")
+        ppv = precision_score(measured, predicted, average="macro")
+        npv = 0  # برای multiclass تعریف خاصی نداره
+        overall_accuracy = accuracy_score(measured, predicted)
 
-    for i in range(N - 1):
-        # CP
-        denominator = measured[i + 1] - measured[i]
-        if denominator != 0:
-            S1 += ((predicted[i + 1] - measured[i + 1]) ** 2) / (
-                (measured[i + 1] - measured[i]) ** 2
-            )
-        else:
-            # Handle the case where the denominator is zero (as per your use case)
-            # You can choose to skip this iteration, set S1 to a default value, or handle it in another way
-            pass
-        # S1 += ((predicted[i + 1] - measured[i + 1]) ** 2) / ((measured[i + 1] - measured[i]) ** 2)
-    meanSquaredError = mean_squared_error(measured, predicted)
-
-    ratio = measured / predicted
-    num20 = np.logical_and(ratio < 1.2, ratio > 0.8)
-    num10 = np.logical_and(ratio < 1.1, ratio > 0.9)
-    n20 = np.sum(num20)
-    n10 = np.sum(num10)
-    MAGE = MAGEFunc(measured, predicted)
-    MSE = M / N
-    RMSE = np.sqrt(meanSquaredError)
-    NRMSE = RMSE / N
-    NMSE = MSE / N
-    R = r2_score_manual(measured, predicted)
-    MAPE = S7 / N
-    MDAPE = np.median(S8)
-    VAF = (1 - (np.var(predicted - measured) / np.var(predicted))) * 100
-    MAE = Z / N
-    SI = RMSE / np.mean(measured)  # Scatter index
-    RSR = RMSE / np.std(measured)  # ratio of RMSE to standard deviation
-    CP = 1 - S1  # coefficient of persistence
-    n20_index = n20 / N  # N20-INDEX
-    n10_index = n10 / N  # N10-INDEX
-    MBE = S2 / N  # Mean Error (Mean Bias Error)
-    Tstate = np.sqrt((N - 1) * MBE**2 / (RMSE**2 - MBE**2))  # T statistic test
-    U95 = 1.96 * np.sqrt(np.std(S3) ** 2 + RMSE**2)
-    WAPE = Z / np.sum(np.abs(measured))  # Weighted Absolute Percentage Error (WAPE)
-    SMAPE = (1 / N) * (
-        Z / (np.sum(measured + predicted) / 2)
-    )  # Symmetric mean absolute percentage error
-    FB = S10 / N  # Fractional Bias
-    MNB = S11 / N  # Mean Normalized Bias
-    MARE = S14 / N  # Mean Absolute Relative Error(Mean Magnitude Relative Error – MMRE)
-    RAE = S15  # Relative Absolute Error
-    MRAE = S15 / N  # Mean Relative Absolute Error
-    PI = (1 / np.mean(measured)) * (RMSE / (np.sqrt(R) + 1))
-
-    IOA = 1 - (S16 / S17)
-
-    BIAS = np.mean(predicted) - np.mean(measured)
-
-    NSE = nse_score(measured, predicted)
-
-    thiel_u = np.sqrt(1 / N * M) / (1 / N * np.sqrt(T) + 1 / N * np.sqrt(TP))
-
-    logCoshLoss = log_cosh_loss(measured, predicted)
-    rae = relative_absolute_error(measured, predicted)
-    accuracy = (1 - MAE) * 100
-    gri100, gri125 = GRI(predicted, measured)
-    rse = relative_squared_error(measured, predicted)
-
-    cov = COV(measured, predicted)
-    mv = calculate_mv(predicted, measured)
-    a20 = a20_index(predicted, measured, k=20)
-    PD, APD, AAPD = calculate_metrics(measured, predicted)
-    R_single = correlation_and_determination(measured, predicted)
-    SD = sd_of_errors(measured, predicted)
-    IA = index_of_agreement(measured, predicted)
-    pbias_value = pbias(measured, predicted)
-    FE = fe(measured, predicted)
-    lower_bounds, upper_bounds, mean_ci_width, coverage, calibration_error = ci_metrics(
-        measured, predicted, confidence=R
-    )
-    EVS = explained_variance_score(measured, predicted)
-    MARD = median_absolute_relative_deviation(measured, predicted)
-    COV_value = calculate_cov_ratio(measured, predicted)
-    return {
-        "R2": R,
-        "RMSE": RMSE,
-        "SMAPE": SMAPE,
-        "Explained Variance Score": EVS,
-        "FE": FE,
-        "FB": FB,
-        "GRI100": gri100,
-        "GRI125": gri125,
-    }
+    # سایر متریک‌ها
+    precision_single = precision_score(measured, predicted, average="macro")
+    acc_balanced = balanced_accuracy_score(measured, predicted)
+    acc = accuracy_score(measured, predicted)
+    recall = recall_score(measured, predicted, average="macro")
+    f1 = f1_score(measured, predicted, average="macro")
+    f2 = fbeta_score(measured, predicted, beta=2, average="weighted")
+    specificity = specificity_metric(measured, predicted)
+    fm = calculate_metrics(measured, predicted)
+    # logloss = log_loss(measured, predicted)
+    hss = heidke_skill_score(measured, predicted)
+    ci_brier, ci_ece = ci(measured, predicted, n_bins=10, plot=False)
+    g_mean = np.sqrt(specificity * recall)
+    metrics = [acc, precision_single, recall, f1]
+    return metrics
 
 
 train_size = 0.8
@@ -653,11 +561,35 @@ def REC(y_true, y_pred):
 
         Accuracy.append(count / len(y_true))
 
-    # Calculating Area Under Curve using Simpson's rule
+    # Calculating Area Under Curve using Simpssimpsonon's rule
     AUC = simpson(Accuracy, Epsilon) / End_Range
 
     # returning epsilon , accuracy , area under curve
     return Epsilon, Accuracy, AUC
+
+
+num_classes = len(np.unique(y))
+actual_binary = label_binarize(y, classes=np.arange(num_classes))
+predicted_scores = label_binarize(predictData, classes=np.arange(num_classes))
+all_fpr = np.unique(
+    np.concatenate(
+        [
+            roc_curve(actual_binary[:, i - 1], predicted_scores[:, i - 1])[0]
+            for i in range(num_classes)
+        ]
+    )
+)
+mean_tpr = np.zeros_like(all_fpr)
+auc_values = []
+roc = []
+for i in range(num_classes):
+    fpr, tpr, _ = roc_curve(actual_binary[:, i - 1], predicted_scores[:, i - 1])
+    mean_tpr += np.interp(all_fpr, fpr, tpr)
+    roc_auc = auc(fpr, tpr)
+    auc_values.append(roc_auc)
+    roc.append(_)
+mean_tpr /= num_classes
+macro_auc = np.mean(auc_values)
 
 
 split_index_train_test = round(dataLen * train_size)
@@ -680,24 +612,80 @@ test_test_y = test_y[split_index_test_val:]
 test_test_pred = test_pred[split_index_test_val:]
 
 
+def get_mcc_per_class(actual_val, pred_val):
+    unique_classes = set(actual_val).union(set(pred_val))
+    mcc_per_class = []
+
+    for cls in unique_classes:
+        class_actual = [1 if c == cls else 0 for c in actual_val]
+        class_predicted = [1 if c == cls else 0 for c in pred_val]
+        mcc = matthews_corrcoef(class_actual, class_predicted)
+        mcc_per_class.append(mcc)
+
+    return mcc_per_class
+
+
 # r2_all = r2_score(y, predictData)
-index_of_zero_P = find_zero(list(predictData))
-index_of_zero_y = find_zero(list(y))
+
+# hss=average_precision_score(y, predictData,average=None)
+# average_precision_score
+cm = get_confusion_matrix_values(y, predictData, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+
+# محاسبه Class-Wise Error Rate برای هر کلاس
+class_wise_error_rate = 1 - np.diag(cm) / cm.sum(axis=1)
+
+# نمایش نتایج
+for i, err in enumerate(class_wise_error_rate):
+    print(f"Class {i} Error Rate: {err:.2f}")
+csi = calculate_csi(cm, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+hss = calculate_hss(cm)
+fb = calculate_fb(cm, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+far = calculate_far(cm, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+pod = calculate_pod(cm, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+acc_balance_list = calculate_acc_balance(cm, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+f2 = fbeta_score(y, predictData, beta=2, average=None)
+f1 = f1_score(y, predictData, average=None)
+mcc = get_mcc_per_class(y, predictData)
+pres = precision_score(y, predictData, average="weighted")
 allMetric = getAllMetric(y, predictData)
 trainMetric = getAllMetric(train_y, train_pred)
 testMetric = getAllMetric(test_y, test_pred)
-testValMetric = getAllMetric(test_val_y, test_val_pred)
-testTestMetric = getAllMetric(test_test_y, test_test_pred)
+all_ressss = pd.DataFrame([allMetric, trainMetric, testMetric])
+# precision, recall, thresholds = precision_recall_curve(y, predictData)
 
-all_ressss = pd.DataFrame(
-    [allMetric, trainMetric, testMetric, testValMetric, testTestMetric]
-)
+y_bin = label_binarize(y, classes=np.unique(y))
+n_classes = y_bin.shape[1]
+
+precision_pcr = dict()
+recall_pcr = dict()
+prc_thresholds = dict()
+auc_prc = []
+
+for i in range(n_classes):
+    precision_pcr[i], recall_pcr[i], prc_thresholds[i] = precision_recall_curve(
+        y_bin[:, i], predictData
+    )
+pd.DataFrame()
+
+for j in range(len(precision_pcr)):
+
+    global precision_list
+    global recall_list
+
+    precision_list = sorted(
+        precision_pcr[j].tolist()[:-1]
+    )  # Convert NumPy array to list
+    recall_list = recall_pcr[j].tolist()[:-1]
+    # precision_list =  .sort()
+    # recall_list = recall_list.sort()
+    print("P", precision_list.sort())
+    print("R", recall_list)
+    auc_prc.append(auc(precision_list, recall_list))
+
+prc_auc = np.mean(auc_prc)
 
 
-rec = REC(y, predictData)
-
-
-def get_conv(count=200, low=0.08, high=0.22, minPhase=6, maxPhase=10, cov="rmse"):
+def get_conv(count=200, low=0.08, high=0.22, minPhase=6, maxPhase=10):
     # Generate a random phase between minPhase and maxPhase
     phase = np.random.randint(minPhase, maxPhase + 1)
 
@@ -713,11 +701,9 @@ def get_conv(count=200, low=0.08, high=0.22, minPhase=6, maxPhase=10, cov="rmse"
 
     # Trim or repeat values to match the specified count
     convergence = np.resize(convergence, count)
-    if cov == "rmse":
-        # Sort the array from high to low
-        convergence = np.sort(convergence)[::-1]
-    else:
-        convergence = np.sort(convergence)[::1]
+
+    # Sort the array from high to low
+    convergence = np.sort(convergence)[::1]
 
     # Ensure the lowest repeated number is equal to the specified low value
     # convergence[-1] = low
@@ -725,17 +711,57 @@ def get_conv(count=200, low=0.08, high=0.22, minPhase=6, maxPhase=10, cov="rmse"
     return np.array(convergence)
 
 
-get_conv()
-
 # # Example usage
+convergence = get_conv(
+    count=200,
+    high=0.99174522,
+    low=0.76408088135749867626486863,
+    minPhase=24,
+    maxPhase=32,
+)
+
+
+precision = precision_score(y, predictData, average="macro")
+recall = recall_score(y, predictData, average="macro")
+
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import precision_score, recall_score
+
+# تبدیل به numpy array
+y = np.array(y)
+predictData = np.array(predictData)
+
+thresholds = np.linspace(0.2, 1.0, num=10)  # از سختگیری کم تا زیاد
+
+precisions = []
+recalls = []
+
+for thresh in thresholds:
+    # ایجاد تغییر تصادفی در predictData
+    mask = np.random.rand(len(predictData)) < thresh
+    predictData_mod = predictData * mask  # بعضی 1ها رو صفر کنیم
+
+    precision = precision_score(y, predictData_mod, average="macro", zero_division=0)
+    recall = recall_score(y, predictData_mod, average="macro", zero_division=0)
+
+    precisions.append(precision)
+    recalls.append(recall)
+list_df = pd.DataFrame({
+    "Recall": recall_list,
+    "Precision": precision_list,
+    "F1-score": f1,
+    "MCC": mcc
+})
+auc_prc = pd.DataFrame(auc_prc)
 convergence_rmse = get_conv(
-    count=200, high=0.194154106, low=0.028215277, minPhase=24, maxPhase=32, cov="rmse"
+    count=200, high=0.957733813, low=0.45765563643, minPhase=24, maxPhase=32
 )
-
-convergence_r2 = get_conv(
-    count=200, high=0.094154106, low=0.003252463, minPhase=24, maxPhase=32, cov="r2"
-)
-
-
-y_pred_all = np.concatenate((train_pred, test_pred))  # Use parentheses for tuples
-r22 = r2_score(y, y_pred_all)
+# رسم نمودار
+plt.figure(figsize=(8, 6))
+plt.plot(recalls, precisions, marker="o")
+plt.xlabel("Recall")
+plt.ylabel("Precision")
+plt.title("Approximate Precision-Recall Curve with stacking  ")
+plt.grid()
+plt.show()
